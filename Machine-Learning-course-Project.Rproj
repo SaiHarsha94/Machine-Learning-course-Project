@@ -1,13 +1,114 @@
-Version: 1.0
+# Installing required libraries:
 
-RestoreWorkspace: Default
-SaveWorkspace: Default
-AlwaysSaveHistory: Default
+library(caret)
+library(rattle)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+library(randomForest)
+library(RColorBrewer)
 
-EnableCodeIndexing: Yes
-UseSpacesForTab: Yes
-NumSpacesForTab: 2
-Encoding: UTF-8
+# Loading data
 
-RnwWeave: Sweave
-LaTeX: pdfLaTeX
+trainUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainFile <- "./data/pml-training.csv"
+testFile  <- "./data/pml-testing.csv"
+if (!file.exists("./data")) {
++   dir.create("./data")
+}
+if (!file.exists(trainFile)) 
+{
++   download.file(trainUrl, destfile = trainFile)
+}
+if (!file.exists(testFile)) 
+{
++   download.file(testUrl, destfile = testFile)
+} 
+rm(trainUrl)
+rm(testUrl)
+
+#Reading data
+
+trainRaw <- read.csv(trainFile)
+testRaw <- read.csv(testFile)
+dim(trainRaw)
+
+dim(testRaw)
+
+# Cleaning the data
+
+rm(trainFile)
+rm(testFile)
+NZV <- nearZeroVar(trainRaw, saveMetrics = TRUE)
+head(NZV, 20)
+
+training01 <- trainRaw[, !NZV$nzv]
+testing01 <- testRaw[, !NZV$nzv]
+dim(training01)
+
+dim(testing01)
+
+# the variables we are going to remove is that the variables that does not contribute in accelerometer measurements.
+
+rm(trainRaw)
+rm(testRaw)
+rm(NZV)
+regex <- grepl("^X|timestamp|user_name", names(training01))
+training <- training01[, !regex]
+testing <- testing01[, !regex]
+rm(regex)
+rm(training01)
+rm(testing01)
+dim(training)
+
+dim(testing)
+
+cond <- (colSums(is.na(training)) == 0)
+training <- training[, cond]
+testing <- testing[, cond]
+rm(cond)
+
+install.packages("corrplot")
+library(corrplot)
+
+#visualize the correlation between different variables in the dataset. based on this we can see our ingnorance of variables before if it is ok or not.
+
+corrplot(cor(training[, -length(names(training))]), method = "color", tl.cex = 0.5)
+
+# Applying models to evaluate data
+
+set.seed(56789) # For reproducible purpose
+inTrain <- createDataPartition(training$classe, p = 0.70, list = FALSE)
+validation <- training[-inTrain, ]
+training <- training[inTrain, ]
+rm(inTrain)
+
+#Decision Tree
+#we are using decisicon tree to fit our model
+
+modelTree <- rpart(classe ~ ., data = training, method = "class")
+rpart.plot(modelTree, main="Classification Tree", extra=102, under=TRUE, faclen=0)
+
+predictTree <- predict(modelTree, validation, type = "class")
+confusionMatrix(predictTree, as.factor(validation$classe))
+
+#Random forest
+#We now train our model using random forest and doing the dame validation
+
+modelRF <- train(classe ~ ., data = training, method = "rf", trControl = trainControl(method = "cv", 5), ntree = 250)
+modelRF
+
+predictRF <- predict(modelRF, validation)
+confusionMatrix(predictRF, as.factor(validation$classe))
+
+#Conlusion
+#we find that the Accuracy of the Random Forest Model and error is better than the Decision Tree model. so we conclude that the random forest is the better model.
+
+#submission part
+#this is the code for predicting outcome levels on the original Testing data set using Random Forest algorithm as it is the chosn model as being better at performance on our data.
+
+rm(accuracy)
+rm(ose)
+predict(modelRF, testing[, -length(names(testing))])
+
